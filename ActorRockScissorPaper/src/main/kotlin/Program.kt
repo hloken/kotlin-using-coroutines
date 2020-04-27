@@ -1,9 +1,6 @@
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.actor
-import kotlinx.coroutines.runBlocking
 import java.util.*
 
 sealed class Move {
@@ -21,7 +18,7 @@ class Start(val response: CompletableDeferred<Int>) : Game()
 class Play(val sender: Channel<Game>, val name: String) : Game()
 class Throw(val actor: String, val move: Move) : Game()
 
-fun CoroutineScope.playerActor() = actor<Game> {
+fun playerActor() = GlobalScope.actor<Game> {
     var name: String
 
     for (msg in channel) {
@@ -43,7 +40,7 @@ fun CoroutineScope.playerActor() = actor<Game> {
     }
 }
 
-fun CoroutineScope.coordinatorActor() = actor<Game> {
+fun coordinatorActor() = GlobalScope.actor<Game> {
     lateinit var startResponse: CompletableDeferred<Int>
 
     val player1 = playerActor()
@@ -63,8 +60,7 @@ fun CoroutineScope.coordinatorActor() = actor<Game> {
                 val playerB = msg2.actor
                 val moveB = msg2.move
                 announce(playerA, moveA, playerB, moveB)
-                player1.close()
-                player2.close()
+
                 startResponse.complete(0)
             }
         }
@@ -74,7 +70,7 @@ fun CoroutineScope.coordinatorActor() = actor<Game> {
 fun announce(playerA: String, moveA: Move, playerB: String, moveB: Move) {
     var awin = false
 
-    log("$playerA -> $moveA, $playerB -> $moveB ")
+    log("$playerA -> $moveA, $playerB -> $moveB")
 
     if (moveA == moveB) {
         log("Draw")
@@ -113,13 +109,13 @@ fun announce(playerA: String, moveA: Move, playerB: String, moveB: Move) {
 
 
 fun main(args: Array<String>) = runBlocking<Unit> {
-    val startResponse = CompletableDeferred<Int>()
-    val job = Job()
-    var coord = coordinatorActor()
-    coord.send(Start(startResponse))
-    startResponse.await()
-
-    coord.close()
+    repeat(10) {
+        val startResponse = CompletableDeferred<Int>()
+        val job = Job()
+        var coord = coordinatorActor()
+        coord.send(Start(startResponse))
+        startResponse.await()
+    }
 }
 
 fun log(msg: String) { println("$msg in ${Thread.currentThread().name}") }
